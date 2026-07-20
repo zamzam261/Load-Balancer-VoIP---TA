@@ -1,0 +1,20 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Log & data hasil pengujian (jangan ikut ter-commit)
+*.log
+*.csv
+*.json
+*.pcap
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
