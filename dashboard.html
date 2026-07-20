@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard QoS VoIP</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg:       #ffffff;
+    --surface:  #ffffff;
+    --surface2: #f6f8fa;
+    --border:   #d0d7de;
+    --text:     #1a1f25;
+    --muted:    #57606a;
+    --accent:   #0969da;
+    --ok:       #1a7f37;
+    --bad:      #cf222e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  header h1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+  #algo-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    transition: all 0.4s ease;
+    background: #f0f6ff;
+    color: var(--accent);
+    border: 1px solid #b6d4fe;
+  }
+  #status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  #status.live { color: var(--ok); }
+
+  /* ── TABS ── */
+  .section-tabs {
+    display: flex;
+    padding: 0 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 10px 20px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── SECTIONS ── */
+  .section { display: none; padding: 20px 24px; }
+  .section.active { display: block; }
+
+  /* ── GRID ── */
+  .grid   { display: grid; gap: 14px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .mb14   { margin-bottom: 14px; }
+
+  /* ── CARD ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .card-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 14px;
+  }
+
+  /* ── METRIC BOX ── */
+  .metric {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    transition: border-color 0.3s;
+  }
+  .metric .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text);
+    transition: color 0.3s;
+  }
+  .metric .unit { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .metric .lbl  { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .metric.ok   { border-color: rgba(26,127,55,0.3); }
+  .metric.ok   .val { color: var(--ok); }
+  .metric.bad  { border-color: rgba(207,34,46,0.3); }
+  .metric.bad  .val { color: var(--bad); }
+  .metric.neutral .val { color: var(--accent); }
+
+  /* ── INFO BAR ── */
+  .info-bar {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 14px;
+    border: 1px solid #b6d4fe;
+    background: #f0f6ff;
+    color: var(--accent);
+  }
+
+  /* ── CHART ── */
+  canvas { max-height: 200px; }
+  .chart-legend {
+    display: flex; gap: 14px; font-size: 11px;
+    color: var(--muted); margin-top: 10px; flex-wrap: wrap;
+  }
+  .chart-legend span { display: flex; align-items: center; gap: 5px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+  /* ── TABLE ── */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--muted);
+    padding: 6px 8px; text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(208,215,222,0.5);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--text);
+  }
+  tr:last-child td { border-bottom: none; }
+
+  /* ── METHOD BAR ── */
+  .method-row {
+    display: flex; justify-content: space-between;
+    align-items: center; padding: 8px 0;
+    border-bottom: 1px solid rgba(208,215,222,0.5);
+    font-size: 12px;
+  }
+  .method-row:last-child { border-bottom: none; }
+  .method-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600; font-size: 11px; color: var(--text);
+  }
+  .method-bar-wrap {
+    flex: 1; margin: 0 12px; height: 4px;
+    background: var(--surface2); border-radius: 2px;
+  }
+  .method-bar {
+    height: 100%; border-radius: 2px;
+    background: var(--accent); transition: width 0.4s ease;
+  }
+  .method-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--muted);
+    min-width: 30px; text-align: right;
+  }
+
+  /* ── WAITING ── */
+  .waiting {
+    text-align: center; padding: 60px 20px;
+    color: var(--muted); font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+  }
+  .waiting .spin {
+    font-size: 24px; display: block;
+    margin-bottom: 12px;
+    animation: spin 2s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 768px) {
+    .grid-2, .grid-4 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ HEADER ══════════════════ -->
+<header>
+  <div class="header-left">
+    <h1>📡 Dashboard QoS VoIP</h1>
+    <span id="algo-badge">— menunggu —</span>
+  </div>
+  <span id="status">⬤ Menunggu data...</span>
+</header>
+
+<!-- ══════════════════ TABS ══════════════════ -->
+<div class="section-tabs">
+  <button class="tab-btn" id="tab-rr" onclick="showSection('rr')">Round-Robin</button>
+  <button class="tab-btn" id="tab-lc" onclick="showSection('lc')">Least Connection</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECTION ROUND-ROBIN
+     PERUBAHAN: Struktur panel IDENTIK dengan LC:
+     - Label "Avg Delay" → "Avg Forwarding Time"
+     - Ditambahkan panel Latency Maks, Gagal (baris ke-2)
+     - Ditambahkan panel Breakdown Metode SIP di bawah
+     ═══════════════════════════════════════════════════════════ -->
+<div class="section" id="section-rr">
+
+  <!-- Baris 1: Forwarding Time, Jitter, B1, B2 -->
+  <div class="grid grid-4 mb14">
+    <div class="metric" id="rr-card-fwd">
+      <div class="val" id="rr-fwd">—</div>
+      <div class="unit">ms</div>
+      <!-- PERUBAHAN: "Avg Delay" → "Avg Forwarding Time" -->
+      <div class="lbl">Avg Forwarding Time</div>
+    </div>
+    <div class="metric" id="rr-card-jitter">
+      <div class="val" id="rr-jitter">—</div>
+      <div class="unit">ms</div>
+      <div class="lbl">Avg Jitter</div>
+    </div>
+    <div class="metric neutral">
+      <div class="val" id="rr-b1">0</div>
+      <div class="unit">req</div>
+      <div class="lbl">Backend 1</div>
+    </div>
+    <div class="metric neutral">
+      <div class="val" id="rr-b2">0</div>
+      <div class="unit">req</div>
+      <div class="lbl">Backend 2</div>
+    </div>
+  </div>
+
+  <!-- PERUBAHAN: Baris ke-2 ditambahkan sama seperti LC -->
+  <div class="grid grid-4 mb14">
+    <div class="metric neutral">
+      <div class="val" id="rr-latmax">—</div>
+      <div class="unit">ms</div>
+      <div class="lbl">Forwarding Time Maks</div>
+    </div>
+    <div class="metric" id="rr-card-gagal">
+      <div class="val" id="rr-gagal">0</div>
+      <div class="unit">paket</div>
+      <div class="lbl">Gagal</div>
+    </div>
+    <div class="metric neutral">
+      <div class="val" id="rr-invite">0</div>
+      <div class="unit">paket</div>
+      <div class="lbl">INVITE</div>
+    </div>
+    <div class="metric neutral">
+      <div class="val" id="rr-bye">0</div>
+      <div class="unit">paket</div>
+      <div class="lbl">BYE</div>
+    </div>
+  </div>
+
+  <div class="info-bar" id="rr-info">Distribusi Round-Robin: menunggu data...</div>
+
+  <!-- Grafik Forwarding Time & Jitter -->
+  <div class="grid grid-2 mb14">
+    <div class="card">
+      <!-- PERUBAHAN: "Delay SIP Forwarding" → "Forwarding Time SIP" -->
+      <div class="card-title">Forwarding Time SIP (ms) — Realtime</div>
+      <canvas id="rr-chartFwd"></canvas>
+      <div class="chart-legend">
+        <span><span class="dot" style="background:#0969da"></span> Forwarding Time ms</span>
+        <span style="color:#1a7f37">✓ Target ≤ 5ms</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Jitter (ms) — Realtime</div>
+      <canvas id="rr-chartJitter"></canvas>
+      <div class="chart-legend">
+        <span><span class="dot" style="background:#57606a"></span> Jitter ms</span>
+        <span style="color:#1a7f37">✓ Target ≤ 30ms</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grafik Distribusi + Panel Metode SIP + History (IDENTIK dengan LC) -->
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="card-title">Distribusi Routing Backend</div>
+      <canvas id="rr-chartRouting"></canvas>
+      <div class="chart-legend" style="margin-top:8px">
+        <span><span class="dot" style="background:#0969da"></span> B1</span>
+        <span><span class="dot" style="background:#57606a"></span> B2</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <!-- PERUBAHAN: Panel kanan RR sekarang identik dengan LC -->
+      <div class="card-title">Breakdown Metode SIP</div>
+      <div id="rr-methods">
+        <div class="method-row">
+          <span class="method-name">INVITE</span>
+          <div class="method-bar-wrap">
+            <div class="method-bar" id="rr-bar-invite" style="width:0%"></div>
+          </div>
+          <span class="method-count" id="rr-cnt-invite">0</span>
+        </div>
+        <div class="method-row">
+          <span class="method-name">ACK</span>
+          <div class="method-bar-wrap">
+            <div class="method-bar" id="rr-bar-ack" style="width:0%"></div>
+          </div>
+          <span class="method-count" id="rr-cnt-ack">0</span>
+        </div>
+        <div class="method-row">
+          <span class="method-name">BYE</span>
+          <div class="method-bar-wrap">
+            <div class="method-bar" id="rr-bar-bye" style="width:0%"></div>
+          </div>
+          <span class="method-count" id="rr-cnt-bye">0</span>
+        </div>
+      </div>
+
+      <div class="card-title" style="margin-top:16px">History QoS — 10 Data Terakhir</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Waktu</th>
+            <!-- PERUBAHAN: "Delay (ms)" → "Fwd Time (ms)" -->
+            <th style="text-align:right">Fwd Time (ms)</th>
+            <th style="text-align:right">Jitter (ms)</th>
+          </tr>
+        </thead>
+        <tbody id="rr-histBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECTION LEAST CONNECTION
+     PERUBAHAN: Struktur panel sekarang IDENTIK dengan RR:
+     - Label "Avg Delay" → "Avg Forwarding Time"
+     - Baris 1 dan 2 ditata ulang ke grid-4 agar seragam
+     ═══════════════════════════════════════════════════════════ -->
+<div class="section" id="section-lc">
+
+  <!-- Baris 1: Forwarding Time, Jitter, B1, B2 (IDENTIK dengan RR) -->
+  <div class="grid grid-4 mb14">
+    <div class="metric" id="lc-card-fwd">
+      <div class="val" id="lc-fwd">—</div>
+      <div class="unit">ms</div>
+      <!-- PERUBAHAN: "Avg Delay" → "Avg Forwarding Time" -->
+      <div class="lbl">Avg Forwarding Time</div>
+    </div>
+    <div class="metric" id="lc-card-jitter">
+      <div class="val" id="lc-jitter">—</div>
+      <div class="unit">ms</div>
+      <div class="lbl">Avg Jitter</div>
+    </div>
+    <div class="metric neutral">
+      <div class="val" id="lc-b1">0</div>
+      <div class="unit">req</div>
+      <div class="lbl">Backend 1</div>
+    </div>
+    <div class="metric neutral">
+      <div class="val" id="lc-b2">0</div>
+      <div class="unit">req</div>
+      <div class="lbl">Backend 2</div>
+    </div>
+  </div>
+
+  <!-- Baris 2: Latency Maks, Gagal, INVITE, BYE (IDENTIK dengan RR) -->
+  <div class="grid grid-4 mb14">
+    <div class="metric neutral">
+      <div class="val" id="lc-latmax">—</div>
+      <div class="unit">ms</div>
+      <div class="lbl">Forwarding Time Maks</div>
+    </div>
+    <div class="metric" id="lc-card-gagal">
+      <div class="val" id="lc-gagal">0</div>
+      <div class="unit">paket</div>
+      <div class="lbl">Gagal</div>
+    </div>
+    <div class="metric neutral">
+      <div class="val" id="lc-invite">0</div>
+      <div class="unit">paket</div>
+      <div class="lbl">INVITE</div>
+    </div>
+    <div class="metric neutral">
+      <div class="val" id="lc-bye">0</div>
+      <div class="unit">paket</div>
+      <div class="lbl">BYE</div>
+    </div>
+  </div>
+
+  <div class="info-bar" id="lc-info">Distribusi Least Connection: menunggu data...</div>
+
+  <!-- Grafik Forwarding Time & Jitter (IDENTIK dengan RR) -->
+  <div class="grid grid-2 mb14">
+    <div class="card">
+      <!-- PERUBAHAN: "Delay SIP Forwarding" → "Forwarding Time SIP" -->
+      <div class="card-title">Forwarding Time SIP (ms) — Realtime</div>
+      <canvas id="lc-chartFwd"></canvas>
+      <div class="chart-legend">
+        <span><span class="dot" style="background:#0969da"></span> Forwarding Time ms</span>
+        <span style="color:#1a7f37">✓ Target ≤ 5ms</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Jitter (ms) — Realtime</div>
+      <canvas id="lc-chartJitter"></canvas>
+      <div class="chart-legend">
+        <span><span class="dot" style="background:#57606a"></span> Jitter ms</span>
+        <span style="color:#1a7f37">✓ Target ≤ 30ms</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grafik Distribusi + Panel Metode SIP + History (IDENTIK dengan RR) -->
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="card-title">Distribusi Routing Backend</div>
+      <canvas id="lc-chartRouting"></canvas>
+      <div class="chart-legend" style="margin-top:8px">
+        <span><span class="dot" style="background:#0969da"></span> B1</span>
+        <span><span class="dot" style="background:#57606a"></span> B2</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Breakdown Metode SIP</div>
+      <div id="lc-methods">
+        <div class="method-row">
+          <span class="method-name">INVITE</span>
+          <div class="method-bar-wrap">
+            <div class="method-bar" id="lc-bar-invite" style="width:0%"></div>
+          </div>
+          <span class="method-count" id="lc-cnt-invite">0</span>
+        </div>
+        <div class="method-row">
+          <span class="method-name">ACK</span>
+          <div class="method-bar-wrap">
+            <div class="method-bar" id="lc-bar-ack" style="width:0%"></div>
+          </div>
+          <span class="method-count" id="lc-cnt-ack">0</span>
+        </div>
+        <div class="method-row">
+          <span class="method-name">BYE</span>
+          <div class="method-bar-wrap">
+            <div class="method-bar" id="lc-bar-bye" style="width:0%"></div>
+          </div>
+          <span class="method-count" id="lc-cnt-bye">0</span>
+        </div>
+      </div>
+
+      <div class="card-title" style="margin-top:16px">History QoS — 10 Data Terakhir</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Waktu</th>
+            <!-- PERUBAHAN: "Delay (ms)" → "Fwd Time (ms)" -->
+            <th style="text-align:right">Fwd Time (ms)</th>
+            <th style="text-align:right">Jitter (ms)</th>
+          </tr>
+        </thead>
+        <tbody id="lc-histBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ WAITING STATE ══════════════════ -->
+<div id="waiting-state" class="waiting">
+  <span class="spin">⚙</span>
+  Menunggu koneksi ke Flask...
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// KONFIGURASI GRAFIK GLOBAL
+// ═══════════════════════════════════════════════════════════
+const chartDefaults = {
+  animation: false,
+  responsive: true,
+  plugins: { legend: { display: false } },
+  scales: {
+    y: {
+      beginAtZero: true,
+      grid: { color: 'rgba(208,215,222,0.6)' },
+      ticks: { color: '#57606a', font: { family: 'JetBrains Mono', size: 10 } }
+    },
+    x: {
+      grid: { display: false },
+      ticks: { color: '#57606a', maxTicksLimit: 8, font: { family: 'JetBrains Mono', size: 9 } }
+    }
+  }
+};
+
+function mkLine(id, color) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return null;
+  return new Chart(ctx, {
+    type: 'line',
+    data: { labels: [], datasets: [{
+      data: [], borderColor: color,
+      backgroundColor: color + '20',
+      fill: true, tension: 0.4, pointRadius: 2, borderWidth: 2
+    }]},
+    options: JSON.parse(JSON.stringify(chartDefaults))
+  });
+}
+
+function mkBar(id, colors) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return null;
+  return new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Backend 1', 'Backend 2'],
+      datasets: [{ data: [0, 0], backgroundColor: colors, borderRadius: 6 }]
+    },
+    options: { ...JSON.parse(JSON.stringify(chartDefaults)), plugins: { legend: { display: false } } }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// INISIALISASI GRAFIK
+// PERUBAHAN: 'chartDelay' → 'chartFwd' di kedua algo
+// ═══════════════════════════════════════════════════════════
+const rrFwd     = mkLine('rr-chartFwd',     '#0969da');
+const rrJitter  = mkLine('rr-chartJitter',  '#57606a');
+const rrRouting = mkBar ('rr-chartRouting', ['#0969da', '#57606a']);
+
+const lcFwd     = mkLine('lc-chartFwd',     '#0969da');
+const lcJitter  = mkLine('lc-chartJitter',  '#57606a');
+const lcRouting = mkBar ('lc-chartRouting', ['#0969da', '#57606a']);
+
+// ═══════════════════════════════════════════════════════════
+// HELPER: push data ke grafik garis
+// ═══════════════════════════════════════════════════════════
+function pushLine(chart, label, val, max = 20) {
+  if (!chart) return;
+  chart.data.labels.push(label);
+  chart.data.datasets[0].data.push(val);
+  if (chart.data.labels.length > max) {
+    chart.data.labels.shift();
+    chart.data.datasets[0].data.shift();
+  }
+  chart.update('none');
+}
+
+function updateBar(chart, b1, b2) {
+  if (!chart) return;
+  chart.data.datasets[0].data = [b1, b2];
+  chart.update('none');
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPER: update tabel history
+// PERUBAHAN: kolom header "Delay" → "Fwd Time"
+// ═══════════════════════════════════════════════════════════
+const rrHistory = [];
+const lcHistory = [];
+
+function updateHistTable(tbodyId, rows, t, fwd, j) {
+  rows.unshift({ t, fwd, j });
+  if (rows.length > 10) rows.pop();
+  document.getElementById(tbodyId).innerHTML = rows.map(r =>
+    `<tr>
+      <td style="color:#57606a">${r.t}</td>
+      <td style="text-align:right;color:${r.fwd > 5 ? '#cf222e' : '#1a7f37'};font-weight:600">${r.fwd}</td>
+      <td style="text-align:right;color:${r.j   > 30 ? '#cf222e' : '#1a7f37'};font-weight:600">${r.j}</td>
+    </tr>`
+  ).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPER: update metrik angka besar
+// PERUBAHAN: threshold forwarding time = 5ms (bukan 150ms)
+// ═══════════════════════════════════════════════════════════
+function setMetric(cardId, valId, val, threshold) {
+  const el   = document.getElementById(valId);
+  const card = document.getElementById(cardId);
+  if (!el) return;
+  el.textContent = val;
+  if (card) card.className = 'metric ' + (val <= threshold ? 'ok' : 'bad');
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPER: update breakdown metode SIP
+// Digunakan untuk KEDUA section (RR dan LC)
+// ═══════════════════════════════════════════════════════════
+function updateMethods(prefix, methods) {
+  const inv    = methods.INVITE || 0;
+  const ack    = methods.ACK    || 0;
+  const bye    = methods.BYE    || 0;
+  const mTotal = inv + ack + bye || 1;
+
+  // Update angka di metric box baris ke-2
+  const invEl = document.getElementById(prefix + '-invite');
+  const byeEl = document.getElementById(prefix + '-bye');
+  if (invEl) invEl.textContent = inv;
+  if (byeEl) byeEl.textContent = bye;
+
+  // Update progress bar di panel breakdown
+  document.getElementById(prefix + '-cnt-invite').textContent = inv;
+  document.getElementById(prefix + '-cnt-ack').textContent    = ack;
+  document.getElementById(prefix + '-cnt-bye').textContent    = bye;
+
+  document.getElementById(prefix + '-bar-invite').style.width = (inv / mTotal * 100) + '%';
+  document.getElementById(prefix + '-bar-ack').style.width    = (ack / mTotal * 100) + '%';
+  document.getElementById(prefix + '-bar-bye').style.width    = (bye / mTotal * 100) + '%';
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPER: update shared stats (latmax + gagal)
+// Digunakan untuk KEDUA section (RR dan LC)
+// ═══════════════════════════════════════════════════════════
+function updateSharedStats(prefix, stats) {
+  const latmaxEl = document.getElementById(prefix + '-latmax');
+  const gagalEl  = document.getElementById(prefix + '-gagal');
+  const cardGagal = document.getElementById(prefix + '-card-gagal');
+
+  if (latmaxEl) latmaxEl.textContent =
+    stats.latency_max ? stats.latency_max.toFixed(3) : '—';
+
+  if (gagalEl) {
+    const gagal = stats.gagal || 0;
+    gagalEl.textContent = gagal;
+    if (cardGagal) cardGagal.className = 'metric ' + (gagal === 0 ? 'ok' : 'bad');
+  }
+
+  if (stats.methods) updateMethods(prefix, stats.methods);
+}
+
+// ═══════════════════════════════════════════════════════════
+// TAB NAVIGATION
+// ═══════════════════════════════════════════════════════════
+let currentSection = null;
+
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const sec = document.getElementById('section-' + name);
+  const btn = document.getElementById('tab-'     + name);
+  if (sec) sec.classList.add('active');
+  if (btn) btn.classList.add('active');
+  currentSection = name;
+}
+
+// ═══════════════════════════════════════════════════════════
+// DETEKSI ALGORITMA OTOMATIS
+// ═══════════════════════════════════════════════════════════
+let lastAlgo = null;
+
+function handleAlgo(algo) {
+  const badge   = document.getElementById('algo-badge');
+  let detected  = 'unknown';
+
+  if (algo && algo.includes('least'))  detected = 'lc';
+  else if (algo && (algo.includes('round') || algo === 'rr')) detected = 'rr';
+
+  badge.textContent = detected === 'rr' ? 'ROUND-ROBIN'
+                    : detected === 'lc' ? 'LEAST-CONNECTION'
+                    : (algo || '—');
+
+  if (detected !== 'unknown' && detected !== lastAlgo) {
+    lastAlgo = detected;
+    showSection(detected);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// SSE — KONEKSI KE FLASK
+// PERUBAHAN UTAMA:
+// - Baca key 'd.qos.fwd' bukan 'd.qos.delay'
+// - shared_stats dikirim ke prefix yang aktif (rr ATAU lc)
+// - Threshold forwarding time = 5ms (bukan 150ms)
+// ═══════════════════════════════════════════════════════════
+const src = new EventSource('/stream');
+let firstData = true;
+
+src.onmessage = (e) => {
+  const d = JSON.parse(e.data);
+
+  if (firstData) {
+    document.getElementById('waiting-state').style.display = 'none';
+    firstData = false;
+  }
+
+  const statusEl     = document.getElementById('status');
+  statusEl.textContent = '⬤ Live — ' + new Date().toLocaleTimeString('id-ID');
+  statusEl.className   = 'live';
+
+  handleAlgo(d.algo || '');
+
+  // ── UPDATE FORWARDING TIME & JITTER ──
+  if (d.qos && d.qos.timestamps && d.qos.timestamps.length) {
+    const n   = d.qos.timestamps.length - 1;
+    const t   = d.qos.timestamps[n];
+    // PERUBAHAN: baca key 'fwd' bukan 'delay'
+    const fwd = d.qos.fwd   ? (d.qos.fwd[n]   ?? 0) : 0;
+    const jit = d.qos.jitter ? (d.qos.jitter[n] ?? 0) : 0;
+
+    if (lastAlgo === 'rr') {
+      pushLine(rrFwd,    t, fwd);
+      pushLine(rrJitter, t, jit);
+      updateHistTable('rr-histBody', rrHistory, t, fwd, jit);
+      document.getElementById('rr-fwd').textContent    = fwd.toFixed(3);
+      document.getElementById('rr-jitter').textContent = jit.toFixed(3);
+      // PERUBAHAN: threshold forwarding time = 5ms
+      setMetric('rr-card-fwd',    'rr-fwd',    fwd, 5);
+      setMetric('rr-card-jitter', 'rr-jitter', jit, 30);
+
+    } else if (lastAlgo === 'lc') {
+      pushLine(lcFwd,    t, fwd);
+      pushLine(lcJitter, t, jit);
+      updateHistTable('lc-histBody', lcHistory, t, fwd, jit);
+      document.getElementById('lc-fwd').textContent    = fwd.toFixed(3);
+      document.getElementById('lc-jitter').textContent = jit.toFixed(3);
+      // PERUBAHAN: threshold forwarding time = 5ms
+      setMetric('lc-card-fwd',    'lc-fwd',    fwd, 5);
+      setMetric('lc-card-jitter', 'lc-jitter', jit, 30);
+    }
+  }
+
+  // ── UPDATE DISTRIBUSI ROUTING ──
+  if (d.routing) {
+    const b1    = d.routing.B1 || 0;
+    const b2    = d.routing.B2 || 0;
+    const total = b1 + b2;
+    const p1    = total ? Math.round(b1 / total * 100) : 0;
+    const p2    = total ? Math.round(b2 / total * 100) : 0;
+
+    const infoText = (algo) =>
+      `Distribusi ${algo}: B1 = ${b1} req (${p1}%) | B2 = ${b2} req (${p2}%) | Total = ${total}`;
+
+    if (lastAlgo === 'rr') {
+      updateBar(rrRouting, b1, b2);
+      document.getElementById('rr-b1').textContent   = b1;
+      document.getElementById('rr-b2').textContent   = b2;
+      document.getElementById('rr-info').textContent = infoText('Round-Robin');
+
+    } else if (lastAlgo === 'lc') {
+      updateBar(lcRouting, b1, b2);
+      document.getElementById('lc-b1').textContent   = b1;
+      document.getElementById('lc-b2').textContent   = b2;
+      document.getElementById('lc-info').textContent = infoText('Least Connection');
+    }
+  }
+
+  // ── UPDATE SHARED STATS (latmax, gagal, methods) ──
+  // PERUBAHAN: key 'lc_stats' → 'shared_stats'
+  // PERUBAHAN: dikirim ke prefix yang aktif (bukan hanya LC)
+  if (d.shared_stats) {
+    if (lastAlgo === 'rr') {
+      updateSharedStats('rr', d.shared_stats);
+    } else if (lastAlgo === 'lc') {
+      updateSharedStats('lc', d.shared_stats);
+    }
+  }
+};
+
+// ── ERROR HANDLER ──
+src.onerror = () => {
+  document.getElementById('status').textContent = '⬤ Koneksi terputus...';
+  document.getElementById('status').className   = '';
+};
+
+// ── SETUP AWAL ──
+document.getElementById('waiting-state').style.display = 'block';
+document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+</script>
+</body>
+</html>
